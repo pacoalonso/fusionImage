@@ -1,0 +1,91 @@
+---
+title: "Introduction to fusionImage"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to fusionImage}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+## Introduction
+
+The R package `fusionImage` is intended for the pan-sharpening of multispectral and panchromatic images coded as Digital Numbers. It has not been tested to merge multispectral images with radiance or reflectivity values. If atmospheric, illumination or topographic correction are intended, it is recommended that the images are merged first.
+
+The package has been tested under GNU/Linux (Xubuntu 16.04 64-bit) and under Windows 7 with version 3.4.2 of R. All the images described in the aforementioned article were tested. If problems appear with other images, please let us know and  provide us with the necessary data to reproduce and fix the problem. Check out the Github page  [http://github.com/pacoalonso/fusionImage](http://github.com/pacoalonso/fusionImage) for new versions.
+
+
+## Usage
+
+```{r lib, message=FALSE}
+library(fusionImage)
+```
+
+First, let's see the multispectral and the panchromatic images:
+
+```{r plotmis, fig.width=8, fig.height=5, fig.caption="Hola"}
+plotRGB(mis, r=3, g=2, b=1, stretch="lin")
+```
+
+```{r rastervis, eval=FALSE, include=FALSE}
+#breaks <- c(6000, 6500, 7000, 7500, 8000, 8500, 9000, 9500, 10000, 25000)
+#Theme <- rasterTheme(region = rev(RColorBrewer::brewer.pal('Greys', n=9)))
+#levelplot(pan, par.settings = Theme, at = breaks, margin = FALSE)
+```
+
+
+```{r plotpan, fig.width=9, fig.height=6}
+breaks <- c(6000, 6500, 7000, 7500, 8000, 8500, 9000, 9500, 10000, 25000)
+colours <- rev(RColorBrewer::brewer.pal('Greys', n=9))
+plot(pan, col = colours, breaks = breaks, axes = FALSE)
+```
+
+and check their respective resolutions:
+
+
+```{r res}
+res(mis)
+res(pan)
+```
+
+Now, we are going to increase resolution of the multispectral bands using the panchromatic band. First, with the high pass filter method (function  `hpf_fusion`):
+
+```{r hpf, fig.width=8, fig.height=5}
+hpf <- hpf_fusion(mis=mis, pan=pan, method="bilinear", bits=16)
+plotRGB(hpf, r=3, g=2, b=1, stretch="lin")
+res(hpf)
+```
+The parameters of function `hpf_fusion` are `mis`, a raster brick containin the multispectral bands, `pan`, a raster layer containing the panchromatic layer, `method`, the method used internally by raster::resample to coregister the layers, and `bits`, the radiometric resolution in bits.
+
+The second pan-sharpening method available in `fusionImage` is principal components analysis (function  `pca_fusion`), which uses the same parameters than `hpf_fusion`:
+
+```{r pca, fig.width=8, fig.height=5}
+pca <- pca_fusion(mis=mis, pan=pan, method="bilinear", bits=16)
+plotRGB(pca, r=3, g=2, b=1, stretch="lin")
+res(pca)
+```
+
+Finally, Gramm-Schmidt algorithm is implemented by the function `gs_fusion`  that uses the same parameters than the other two.
+
+```{r gs, fig.width=8, fig.height=5}
+gs <- gs_fusion(mis=mis, pan=pan, method="bilinear", bits=16)
+plotRGB(gs, r=3, g=2, b=1, stretch="lin")
+res(gs)
+```
+
+The results of the three transformation are similar, with PCA producing the most crisp results and HPF producing the most blurry results. However, a quantitative assessment of the quality of the results is needed. The `ergas_spat` and `ergas:spec` provide such assessment:  
+
+```{r ergas}
+ergas_res <- matrix(rep(NA,6), ncol=3)
+ergas_res[1,1] <- ergas_spat(original=mis, modified=hpf, pan=pan, method="bilinear")
+ergas_res[1,2] <- ergas_spat(original=mis, modified=pca, pan=pan, method="bilinear")
+ergas_res[1,3] <- ergas_spat(original=mis, modified=gs, pan=pan, method="bilinear")
+ergas_res[2,1] <- ergas_spec(original=mis, modified=hpf, pan=pan, method="bilinear")
+ergas_res[2,2] <- ergas_spec(original=mis, modified=pca, pan=pan, method="bilinear")
+ergas_res[2,3] <- ergas_spec(original=mis, modified=gs, pan=pan, method="bilinear")
+colnames(ergas_res) <- c("HPF", "PCA", "GS")
+row.names(ergas_res) <- c("Spatial", "Spectral")
+ergas_res
+```
+
+
+

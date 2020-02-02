@@ -1,0 +1,49 @@
+﻿
+
+- Nombres de ficheros sin mayúsculas nombres significativos y extensión .R
+- Los ficheros de datos tienen extensión .RData
+- Si los ficheros se deben ejecutar en un orden específica, nombralos alfabéticamente
+
+- lintr::lint_package(“path al directorio del paquete”) permite detectar fallos de estilo
+
+- Variables: nombres, minúscula, _ para separar palabras
+- Funciones: verbos, lo mismo
+
+- Asignación con <- en vez de =
+- Espacios alrededor de = (parámetros), +, -, < - (asignación), etc.
+- Sin espacios alrededor de :, ::, :::, $ o @
+- Sin espacios en código entre paréntesis o corchetes
+- Espacio tras la coma
+- Espacio antes de paréntesis izquierdo salvo llamando a una función
+- En expresiones que controlan los índices entre corchetes, omitir espacios entre símbolos.
+- Llaves se abren al final de línea y se cierran solas en la línea. 
+- Indentar (2 o 4 caracteres) el código entre llaves
+- Trozos muy cortos pueden ir sin llaves y en la misma línea
+- En declaraciones de funciones largas, indentar para que los argumentos aparezcan alineados
+- Lo mismo en llamadas a funciones o en condiciones complejas dentro de un if
+- Si hay que partir una línea dejar operadores al final de la primera línea, no al inicio de la segunda
+
+- 80-100 caracteres por línea
+- No poner varias órdenes en una sola linea
+- 1 pantalla por función
+
+- Argumentos obligatorios al inicio, optativos al final.
+- No mezclar argumentos por nombre con argumentos por posición.
+
+- Comentarios: explican porqué no qué
+- Si son cortos pueden ir al final de la línea comentada
+- Al comentar posibles errores poner # FIXME y documentar
+
+- Nunca ejecutar código en un paquete
+- Nunca incluir library, require, source en una función
+- Utilizar on.exit para dejar como estaban las cosas globales que se hayan cambiado.
+
+- Las funciones que generan gráfico o texto solo deben generar salida.
+- Las que devuelvan objetos deben hacerlo explícitamente con return.
+- Utilizar paquete::funcion
+- Poner los valores por defecto en la función y poner NULL en la definición.
+ 
+- Evitar rm() y setwd()
+
+-No utilizar paths absolutos
+-No utilizar variables globales

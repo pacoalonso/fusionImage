@@ -1,0 +1,311 @@
+#' Calculate filtering matrix for High Pass Filter. Internally used by HPF_fusion function
+#'
+#' @param r A number
+#' @return A matrix object with the filtering matrix whose size depends on r
+#' @export 
+get_matrix <- function(r) {
+    if (r >= 1 & r < 2.5) {
+        hpk <- 5
+        vc <- 24
+        m <- 0.25
+    }
+    if (r >= 2.5 & r < 3.5) {
+        hpk <- 7
+        vc <- 48
+        m <- 0.5
+    }
+    if (r >= 3.5 & r < 5.5) {
+        hpk <- 9
+        vc <- 80
+        m <- 0.5
+    }
+    if (r >= 5.5 & r < 7.5) {
+        hpk <- 11
+        vc <- 120
+        m <- 0.65
+    }
+    if (r >= 7.5 & r < 9.5) {
+        hpk <- 13
+        vc <- 168
+        m <- 1
+    }
+    if (r >= 9.5) {
+        hpk <- 15
+        vc <- 336
+        m <- 1.35
+    }
+    HPM <- matrix(rep(-1, hpk^2), ncol <- hpk)
+    HPM[ceiling(hpk/2), ceiling(hpk/2)] <- vc
+    return(list(hpk = hpk, vc = vc, m = m, HPM = HPM))
+}
+
+#' Gram-Schmidt Transformation 
+#'
+#' @param mis Raster brick object with the original multispectral bands
+#' @param pan Raster layer object with the panchromatic band
+#' @param method Resampling method, should be ‘"bilinear"’ for bilinear interpolation, or ‘"ngb"’
+#' @param bits Radiometric resolution of the original multispectral bands
+#' @return Raster brick object with the bands obtained by the fusion process
+#' @import stats
+#' @import raster
+#' @export 
+GSfusion <- function(mis, pan, method="bilinear", bits){
+
+     r_res=bits
+     GS=GS_inv=BT=NB=list()
+
+     # Paso 1 Pancromático simulado
+            cat(1,"\n")
+     GS[[1]]=mean(mis)  
+ 
+
+     # Paso 2 Transformación Gram-Schmidt
+            cat(2,"\n")
+     for (b in 1:nlayers(mis)){      
+          k=b+1
+          rs=raster(mis,layer=b)
+          GS[[k]]= rs - cellStats(rs,"mean")         
+          for (j in 1:b){
+              cv=layerStats(brick(raster(mis,layer=b) ,GS[[j]]), "cov",na.rm=TRUE)
+              phi=cv$covariance[1,2]/cv$covariance[2,2]     
+              GS[[k]]=GS[[k]]-phi*GS[[j]]
+          }
+     }
+
+     # Paso 3 Ajuste de la banda pan para que tenga media y sd de GS[[1]] 
+            cat(3,"\n")
+      gain=sd(values(GS[[1]]),na.rm=T)/sd(values(pan),na.rm=T)
+      bias=mean(values(GS[[1]]),na.rm=T)-gain*mean(values(pan),na.rm=T)
+     pan=pan*gain + bias
+ 
+     # Paso 4a: Resampleo de las bandas GS2 a GS(N+1) y de las originales 
+            cat(4,"\n")
+     GS_inv[[1]]=pan
+     for (b in 1:nlayers(mis)) GS_inv[[b+1]]=resample(GS[[b+1]],pan,method=method) 
+     BT=resample(mis,pan,method=method)
+
+     # Paso 4b: Cálculo de bandas GS2 a GS(N+1) sumando la media de la banda original
+            cat(4,"\n")
+     for (b in 1:nlayers(mis)){
+          k=b+1
+	  rs=raster(BT,layer=1)
+	  NB[[k]] = GS_inv[[k]] + cellStats(rs,"mean")
+     }
+
+
+     # Paso 4c: Inversa de GS
+            cat(4,"\n")
+        rr=2^r_res-1
+     for (b in 1:nlayers(mis)){
+          rs=raster(mis,layer=b)
+          for(j in 1:b){
+              cv=layerStats(brick(rs,GS[[j]]), "cov",na.rm=TRUE)
+              phi=cv$covariance[1,2]/cv$covariance[2,2] 
+              if(j==1){suma= GS_inv[[j]] * phi}else{suma=suma + phi * GS_inv[[j]]} 
+              cat(b,j,cv$covariance[2,2],cv$covariance[1,2],"\n")
+          }
+          NB[[b]]= round(GS_inv[[b+1]] + cellStats(rs,"mean",na.rm=TRUE) + suma)
+             values(NB[[b]])[which(values(NB[[b]])<0)]=0
+             values(NB[[b]])[which(values(NB[[b]])>rr)]=rr
+     }
+
+     kk=brick(NB[-length(NB)])
+     return(kk)
+}
+
+#' High Pass Filter Transformation 
+#'
+#' @param mis Raster brick object with the original multispectral bands
+#' @param pan Raster layer object with the panchromatic band
+#' @param method Resampling method, should be ‘"bilinear"’ for bilinear interpolation, or ‘"ngb"’
+#' @param bits Radiometric resolution of the original multispectral bands
+#' @return Raster brick object with the bands obtained by the fusion process
+#' @import stats
+#' @import raster
+#' @export 
+HPFfusion <- function(mis,pan,method="bilinear",bits){
+
+        r_res=bits
+	# Cálculo de la matriz de filtrado
+	R=res(mis)[1]/res(pan)[1]  #(eq. 1)
+	matriz=get_matrix(R)
+	w=matriz$HPM
+
+	# Filtrado y recorte
+	pan_fil=focal(pan,w)
+	pan_trim=trim(pan_fil)
+
+	# Cálculo de la desviación típica de la filtrada recortada
+	sd_pan=cellStats(pan_trim,"sd")
+
+	# Para cada capa del pancromático:
+	#   1: resampleo, 2: cálculo de sd, 3: cáculo de w (eq. 2), 4 cálculo de la capa Pout (eq. 3)
+        #   5: cálculo de gain y bias (eq. 5), 6: Cálculo de Pfus (eq. 4), 7: Corrección de niveles
+	Pfus=list()
+        rr=2^r_res-1
+	for (b in 1:nlayers(mis)){
+          cat(b,"\n")
+	  capa=resample(raster(mis,layer=b),pan_trim,method=method)
+          cat(b,"\n")
+	  sd_mis=cellStats(capa,"sd")
+	  w=matriz$m*sd_mis/sd_pan
+	  Pout = capa + w*pan_trim
+	  gain = sd_mis/cellStats(Pout,"sd")
+	  bias=cellStats(capa,"mean") - gain*cellStats(Pout,"mean")
+          Pfus[[b]]=round(Pout*gain + bias)
+          values(Pfus[[b]])[which(values(Pfus[[b]])<0)]=0
+          values(Pfus[[b]])[which(values(Pfus[[b]])>rr)]=rr
+        }
+        return(brick(Pfus))
+}
+
+#' Principal Components Analysis Transformation
+#'
+#' @param mis Raster brick object with the original multispectral bands
+#' @param pan Raster layer object with the panchromatic band
+#' @param method Resampling method, should be ‘"bilinear"’ for bilinear interpolation, or ‘"ngb"’
+#' @param bits Radiometric resolution of the original multispectral bands
+#' @param matrix PCA matrix
+#' @param mode With mode=-1 the first component is multiplied by -1
+#' @return Raster brick object with the bands obtained by the fusion process
+#' @import stats
+#' @import raster
+#' @export 
+PCAfusion = function (mis, pan, method, bits, matrix = NULL, mode = 1) {
+    r_res=bits
+    capa = list()
+    for (b in 1:nlayers(mis)) {
+        capa[[b]] = resample(mis[[b]], pan, method = method)
+    }
+    pixels = nrow(capa[[1]]) * ncol(capa[[1]])
+    mx = matrix(rep(NA, nlayers(mis) * pixels), ncol = nlayers(mis))
+    for (b in 1:nlayers(mis)) mx[, b] = values(capa[[b]])
+    if (!is.null(matrix)) {
+        rotation = matrix
+    }
+    else {
+        pca <- prcomp(na.omit(mx), center = TRUE)
+        rotation = t(pca$rotation)
+        if (mode == -1 & sum(sign(rotation[1, ])) < 0) 
+            rotation[1, ] = -1 * rotation[1, ]
+    }
+    cat("PCA Rotation:\n\n")
+    for (b in 1:nlayers(mis)) cat(paste0("PC", b), rotation[b, 
+        ], "\n")
+    if (sum(sign(rotation[1, ])) < 0) 
+        cat("\nWARNING: First component negatively correlated with bands. Use mode=-1\n")
+    prediccion = matrix(rep(0, nlayers(mis) * pixels), ncol = nlayers(mis))
+    for (j in 1:nlayers(mis)) {
+        for (i in 1:nlayers(mis)) {
+            prediccion[, i] = prediccion[, i] + rotation[i, j] * 
+                values(capa[[j]])
+        }
+    }
+    pc1 = prediccion[, 1]
+    gain = sd((pc1), na.rm = T)/sd(values(pan), na.rm = T)
+    bias = mean((pc1), na.rm = T) - gain * mean(values(pan), 
+        na.rm = T)
+    pan_ajust = pan * gain + bias
+    prediccion[, 1] = values(pan_ajust)
+    xx = matrix(rep(0, nlayers(mis) * pixels), ncol = nlayers(mis))
+    for (i in 1:nlayers(mis)) {
+        for (b in 1:nlayers(mis)) xx[, i] = xx[, i] + rotation[b, 
+            i] * prediccion[, b]
+    }
+    capa2 = capa
+    rr = 2^r_res - 1
+    for (b in 1:nlayers(mis)) {
+        values(capa2[[b]]) = round(xx[, b])
+        values(capa2[[b]])[which(values(capa2[[b]]) < 0)] = 0
+        values(capa2[[b]])[which(values(capa2[[b]]) > rr)] = rr
+    }
+    return(brick(capa2))
+}
+
+f.iq = function(original, modified, method = "bilinear"){
+    resamp = resample(original, modified, method = method)
+    b11 = values(resamp)
+    b12 = values(modified)
+    w = which(!is.na(b11) & !is.na(b12))
+    r = cor(b11[w], b12[w])
+    m = 2 * mean(b11[w]) * mean(b12[w])/(mean(b11[w])^2 + mean(b12[w])^2)
+    s = 2 * sd(b11[w]) * sd(b12[w])/(var(b11[w]) + var(b12[w]))
+    q = r * m * s
+    iq = c(r, m, s, q)
+    names(iq) = c("Correlation", "Mean", "Standard Deviation", "IQ")
+    return(iq)
+}
+
+
+#' IQ Quality index
+#'
+#' @param original Raster brick object with the original multispectral bands
+#' @param modified Raster brick object with the bands obtained by the fusion process
+#' @param method Resampling method, should be ‘"bilinear"’ for bilinear interpolation, or ‘"ngb"’
+#' @return Quality index
+#' @import stats
+#' @import raster
+#' @export 
+IQ <- function(original,modified,method="bilinear"){
+        iq = rep(NA,nlayers(original)*4)
+        dim(iq) = c(4,nlayers(original))
+        colnames(iq) = names(original)
+        rownames(iq)=c("Correlation","Mean","Standard Deviation","IQ")
+        for (b in 1:nlayers(original)) iq[,b] = f.iq(original[[b]], modified[[b]], method="bilinear")
+        return(iq)
+}
+
+#' ERGAS Spectral Quality index
+#'
+#' @param original Raster brick object with the original multispectral bands
+#' @param modified Raster brick object with the bands obtained by the fusion process
+#' @param method Resampling method, should be ‘"bilinear"’ for bilinear interpolation, or ‘"ngb"’
+#' @param rp Resolution of the original panchromatic band
+#' @param rms Resolution of the original multispectral bands
+#' @return Quality index
+#' @import stats
+#' @import raster
+#' @export 
+ERGAS_spec <- function (rp,rms=mean(res(original)),original,modified,method) {    
+    resamp=resample(original,modified,method=method)
+    me=values(resamp);fus=values(modified)
+    RMSE2=multi=c()
+    for (b in 1:dim(me)[2]){
+         RMSE2[b]=mean((me[,b]-fus[,b])^2,na.rm =TRUE)
+         multi[b]=mean(me[,b],na.rm =TRUE)^2
+    }
+    return(100*rp*sqrt(mean(RMSE2/multi,na.rm =TRUE))/rms)
+}
+
+#' ERGAS Spatial Quality index
+#'
+#' @param rp Resolution of the original panchromatic band
+#' @param rms Resolution of the original multispectral bands
+#' @param original Raster brick object with the original multispectral bands
+#' @param modified Raster brick object with the bands obtained by the fusion process
+#' @param pan Raster layer object with the panchromatic band
+#' @param method Resampling method, should be ‘"bilinear"’ for bilinear interpolation, or ‘"ngb"’
+#' @return Quality index
+#' @import stats
+#' @import raster 
+#' @export 
+ERGAS_spat <- function (rp=mean(res(pan)), rms=mean(res(original)),original,modified,pan,method) {
+    resamp=resample(original,modified,method=method)
+    me=values(resamp);fus=values(modified)
+    RMSE2=multi=c()
+    for (b in 1:nlayers(original)){
+           #cat(b,"\n")
+ 	   #gain1 = cellStats(raster(resamp,b),"sd")/cellStats(pan,"sd")
+           gain1=sd(values(raster(resamp,b)),na.rm =TRUE) / sd(values(pan),na.rm =TRUE)
+	   #bias=cellStats(raster(resamp,b),"mean") - gain1*cellStats(pan,"mean")
+           bias=mean(values(raster(resamp,b)),na.rm =TRUE) - gain1 * mean(values(pan),na.rm =TRUE)
+	   pan_adj=pan*gain1 + bias    
+           #pn=values(pan_adj)
+           RMSE2[b]=mean(values(pan_adj-modified[[b]])^2,na.rm =TRUE)
+           #RMSE2[b]=mean((pn-fus[,b])^2,na.rm =TRUE)
+           multi[b]=mean(me[,b],na.rm =TRUE)^2          
+    }
+    return(100*rp*sqrt(mean(RMSE2/multi,na.rm =TRUE))/rms)
+}
+
+

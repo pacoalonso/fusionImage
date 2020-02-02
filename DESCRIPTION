@@ -1,0 +1,25 @@
+Package: fusionImage
+Title: This package implemente three image fusion algorithms (High Pass
+        Filter, Principal Component Analysis, and Gram-Schmidt), and
+        ERGAS fussion quality index
+Version: 0.0.1
+Authors@R: c(
+    person("Paul", "Pesántez-Cobos", email = "paul_pz@hotmail.com", role = c("aut")),
+    person("Fulgencio", "Cánovas-García", email="fugencio.canovas@um.es", role = c("aut")),
+    person("Francisco", "Alonso-Sarría", email = "alonsarp@um.es", role = c("aut", "cre")))
+Maintainer: Francisco Alonso-Sarria <alonsarp@um.es>
+Description: This package implemente three image fussion algorithms (High Pass
+    Filter, Principal Component Analysis, and Gram-Schmidt), and two fussion quality
+    indices (IQ and ERGAS).
+Depends: R (>= 2.5.0), raster
+Suggests: testthat, knitr, rmarkdown, RColorBrewer
+VignetteBuilder: knitr
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+NeedsCompilation: no
+Packaged: 2018-07-10 19:07:01 UTC; alonso
+Author: Paul Pesántez-Cobos [aut],
+  Fulgencio Cánovas-García [aut],
+  Francisco Alonso-Sarría [aut, cre]
+RoxygenNote: 7.0.2

@@ -1,0 +1,9 @@
+.Rbuildignore
+.gitignore
+compila.R
+recomendacionesEstiloR.txt
+R/fusionImage.Rbk
+R/f_iq.R
+R/iq.R
+^doc$
+^Meta$
