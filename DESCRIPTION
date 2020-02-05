@@ -10,7 +10,7 @@ Authors@R: c(
 Maintainer: Francisco Alonso-Sarria <alonsarp@um.es>
 Description: This package implemente three image fussion algorithms (High Pass
     Filter, Principal Component Analysis, and Gram-Schmidt), and two fussion quality
-    indices (IQ and ERGAS).
+    indices (ERGAS spatial and ERGAS spectral).
 Depends: R (>= 2.5.0), raster
 Suggests: testthat, knitr, rmarkdown, RColorBrewer
 VignetteBuilder: knitr
