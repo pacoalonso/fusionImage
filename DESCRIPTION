@@ -6,7 +6,7 @@ Version: 0.0.1
 Authors@R: c(
     person("Paul", "Pesántez-Cobos", email = "paul_pz@hotmail.com", role = c("aut")),
     person("Fulgencio", "Cánovas-García", email="fugencio.canovas@um.es", role = c("aut")),
-    person("Francisco", "Alonso-Sarría", email = "alonsarp@um.es", role = c("aut", "cre")))
+    person("Francisco", "Alonso-Sarria", email = "alonsarp@um.es", role = c("aut", "cre")))
 Maintainer: Francisco Alonso-Sarria <alonsarp@um.es>
 Description: This package implemente three image fussion algorithms (High Pass
     Filter, Principal Component Analysis, and Gram-Schmidt), and two fussion quality
