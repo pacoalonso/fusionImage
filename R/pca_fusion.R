@@ -4,7 +4,7 @@
 #' @param pan Raster layer object with the panchromatic band
 #' @param method Resampling method, should be ‘"bilinear"’ for bilinear interpolation, or ‘"ngb"’
 #' @param bits Radiometric resolution of the original multispectral bands
-#' @param matrix PCA matrix
+#' @param matrix PCA matrix. It is the pca matrix of variable loadings. The usual working mode is to allow the function calculates it, but it can be introduced by the user. 
 #' @param mode With mode=-1 the first component is multiplied by -1
 #'
 #' @return Raster brick object with the bands obtained by the fusion process
