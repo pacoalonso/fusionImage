@@ -15,7 +15,7 @@ pca_fusion(mis, pan, method, bits, matrix = NULL, mode = 1)
 
 \item{bits}{Radiometric resolution of the original multispectral bands}
 
-\item{matrix}{PCA matrix}
+\item{matrix}{PCA matrix. It is the pca matrix of variable loadings. The usual working mode is to allow the function calculates it, but it can be introduced by the user.}
 
 \item{mode}{With mode=-1 the first component is multiplied by -1}
 }
